@@ -1,56 +1,45 @@
-import axios from 'axios'
-import { User, AuthResponse } from '../types'
+import api from './api'
+import { User, TokenResponse } from '../types'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+export async function signup(email: string, password: string, name: string): Promise<TokenResponse> {
+  const response = await api.post('/auth/signup', { email, password, name })
+  const data = response.data
+  localStorage.setItem('access_token', data.access_token)
+  localStorage.setItem('user', JSON.stringify(data.user))
+  return data
+}
 
-const api = axios.create({
-  baseURL: API_URL,
-})
+export async function login(email: string, password: string): Promise<TokenResponse> {
+  const response = await api.post('/auth/login', { email, password })
+  const data = response.data
+  localStorage.setItem('access_token', data.access_token)
+  localStorage.setItem('user', JSON.stringify(data.user))
+  return data
+}
 
-// Add auth token to requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
-export const signup = async (data: {
-  email: string
-  password: string
-  name: string
-}): Promise<AuthResponse> => {
-  const response = await api.post<AuthResponse>('/auth/signup', data)
+export async function getCurrentUser(): Promise<User> {
+  const response = await api.get('/auth/me')
   return response.data
 }
 
-export const login = async (data: {
-  email: string
-  password: string
-}): Promise<AuthResponse> => {
-  const response = await api.post<AuthResponse>('/auth/login', data)
-  return response.data
+export async function updateProfile(data: { name?: string; email?: string }): Promise<User> {
+  const response = await api.put('/auth/profile', data)
+  const user = response.data
+  localStorage.setItem('user', JSON.stringify(user))
+  return user
 }
 
-export const getCurrentUser = async (): Promise<User> => {
-  const response = await api.get<User>('/auth/me')
-  return response.data
+export async function logout(): Promise<void> {
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('user')
 }
 
-export const forgotPassword = async (email: string): Promise<{ message: string }> => {
+export async function forgotPassword(email: string): Promise<{ message: string }> {
   const response = await api.post('/auth/forgot-password', { email })
   return response.data
 }
 
-export const resetPassword = async (token: string, newPassword: string): Promise<{ message: string }> => {
+export async function resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
   const response = await api.post('/auth/reset-password', { token, new_password: newPassword })
   return response.data
 }
-
-export const updateProfile = async (data: Partial<User>): Promise<User> => {
-  const response = await api.put<User>('/auth/profile', data)
-  return response.data
-}
-
-export default api

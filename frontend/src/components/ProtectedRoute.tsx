@@ -1,20 +1,19 @@
+import { Navigate, ReactNode } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Navigate } from 'react-router-dom'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 interface ProtectedRouteProps {
-  children: React.ReactNode
-  admin?: boolean
+  children: ReactNode
+  requiredRole?: 'user' | 'admin'
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, admin = false }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
   const { isAuthenticated, loading, user } = useAuth()
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin">
-          <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full" />
-        </div>
+        <LoadingSpinner size="lg" />
       </div>
     )
   }
@@ -23,8 +22,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, admin = false
     return <Navigate to="/login" replace />
   }
 
-  if (admin && user?.role !== 'admin') {
-    return <Navigate to="/dashboard" replace />
+  if (requiredRole && user?.role !== requiredRole) {
+    return <Navigate to="/" replace />
   }
 
   return <>{children}</>

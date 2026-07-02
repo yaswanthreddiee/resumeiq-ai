@@ -1,127 +1,78 @@
 export interface User {
-  id: string
+  _id?: string
+  id?: string
   email: string
   name: string
-  avatar?: string
   role: 'user' | 'admin'
-  createdAt: string
-  updatedAt: string
+  created_at?: string
+  updated_at?: string
 }
 
-export interface AuthResponse {
+export interface TokenResponse {
   access_token: string
   token_type: string
   user: User
 }
 
-export interface Resume {
-  id: string
-  userId: string
-  fileName: string
-  fileUrl: string
-  uploadedAt: string
-  parsedContent: ResumeParsedContent
-  atsScore?: ATSScore
-  createdAt: string
-  updatedAt: string
-}
-
 export interface ResumeParsedContent {
   summary?: string
   skills: string[]
-  experience: Experience[]
-  education: Education[]
-  projects: Project[]
-  certifications: Certification[]
-}
-
-export interface Experience {
-  title: string
-  company: string
-  startDate: string
-  endDate: string
-  description: string
-}
-
-export interface Education {
-  degree: string
-  institution: string
-  field: string
-  graduationDate: string
-}
-
-export interface Project {
-  name: string
-  description: string
-  technologies: string[]
-  url?: string
-}
-
-export interface Certification {
-  name: string
-  issuer: string
-  issueDate: string
-  expiryDate?: string
+  experience: any[]
+  education: any[]
+  projects: any[]
+  certifications: any[]
 }
 
 export interface ATSScore {
-  id: string
-  resumeId: string
-  overallScore: number
-  keywordMatch: number
-  grammarScore: number
-  formattingScore: number
-  actionVerbScore: number
-  missingSkills: string[]
+  id?: string
+  resume_id?: string
+  overall_score: number
+  keyword_match: number
+  grammar_score: number
+  formatting_score: number
+  action_verb_score: number
+  missing_skills: string[]
   suggestions: string[]
-  sectionAnalysis: SectionAnalysis[]
-  createdAt: string
-}
-
-export interface SectionAnalysis {
-  section: string
-  score: number
-  feedback: string[]
+  section_analysis: any[]
+  created_at?: string
 }
 
 export interface JobMatching {
-  id: string
-  resumeId: string
-  jobDescription: string
-  matchPercentage: number
-  matchedKeywords: string[]
-  missingKeywords: string[]
+  id?: string
+  resume_id?: string
+  job_description: string
+  match_percentage: number
+  matched_keywords: string[]
+  missing_keywords: string[]
   suggestions: string[]
-  createdAt: string
+  created_at?: string
+}
+
+export interface Resume {
+  id: string
+  _id?: string
+  user_id?: string
+  file_name: string
+  file_url: string
+  uploaded_at: string
+  parsed_content?: ResumeParsedContent
+  ats_score?: ATSScore
+  created_at?: string
+  updated_at?: string
 }
 
 export interface Analytics {
-  totalResumes: number
-  averageAtsScore: number
-  totalAnalyses: number
-  scoreHistory: ScoreHistory[]
-  uploadStats: UploadStats[]
-}
-
-export interface ScoreHistory {
-  date: string
-  score: number
-}
-
-export interface UploadStats {
-  date: string
-  count: number
+  total_resumes: number
+  average_ats_score: number
+  total_analyses: number
+  score_history: Array<{ date: string; score: number }>
+  upload_stats: Array<{ date: string; count: number }>
 }
 
 export interface AdminStats {
-  totalUsers: number
-  totalResumes: number
-  totalAnalyses: number
-  averageAtsScore: number
-  userGrowth: GrowthData[]
-}
-
-export interface GrowthData {
-  date: string
-  users: number
+  total_users: number
+  total_resumes: number
+  total_analyses: number
+  average_ats_score: number
+  user_growth: Array<{ date: string; users: number }>
 }
