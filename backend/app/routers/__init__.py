@@ -1,3 +1,1 @@
-"""
-Routers initialization.
-"""
+"""Routers module."""

@@ -1,3 +1,1 @@
-"""
-Middleware initialization.
-"""
+"""Middleware module."""

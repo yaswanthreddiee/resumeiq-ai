@@ -1,49 +1,103 @@
-from fastapi import APIRouter, Depends, status
-from app.schemas.schemas import UserSignupSchema, UserLoginSchema, UserSchema, TokenSchema
+"""Authentication router."""
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from bson import ObjectId
+from app.schemas.schemas import UserSignupSchema, UserLoginSchema, TokenResponseSchema, UpdateProfileSchema
 from app.controllers.auth_controller import AuthController
-from app.middleware.auth import get_current_user
 from app.database.mongo import get_db
+from app.utils.exceptions import AppException
+from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-@router.post("/signup", response_model=TokenSchema, status_code=status.HTTP_201_CREATED)
-async def signup(data: UserSignupSchema, db = Depends(get_db)):
-    """User signup."""
-    controller = AuthController(db)
-    return await controller.signup(data)
 
-@router.post("/login", response_model=TokenSchema)
-async def login(data: UserLoginSchema, db = Depends(get_db)):
-    """User login."""
-    controller = AuthController(db)
-    return await controller.login(data)
+def get_auth_controller(db = Depends(get_db)):
+    """Get auth controller instance."""
+    return AuthController(db)
 
-@router.get("/me", response_model=UserSchema)
-async def get_current_user_info(current_user = Depends(get_current_user)):
-    """Get current user information."""
-    return {
-        "_id": str(current_user["_id"]),
-        "email": current_user["email"],
-        "name": current_user["name"],
-        "role": current_user.get("role", "user"),
-        "created_at": current_user["created_at"],
-        "updated_at": current_user["updated_at"],
-    }
+
+@router.post("/signup", response_model=TokenResponseSchema, status_code=201)
+async def signup(
+    data: UserSignupSchema,
+    controller: AuthController = Depends(get_auth_controller)
+):
+    """Register new user."""
+    try:
+        return await controller.signup(data)
+    except AppException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except Exception as e:
+        logger.error(f"Signup error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/login", response_model=TokenResponseSchema)
+async def login(
+    data: UserLoginSchema,
+    controller: AuthController = Depends(get_auth_controller)
+):
+    """Authenticate user."""
+    try:
+        return await controller.login(data)
+    except AppException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/me")
+async def get_current_user(
+    request: Request,
+    db = Depends(get_db)
+):
+    """Get current authenticated user."""
+    try:
+        user_id = request.state.user_id
+        user = await db.users.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return {
+            "_id": str(user["_id"]),
+            "email": user["email"],
+            "name": user["name"],
+            "role": user.get("role", "user"),
+            "created_at": user["created_at"],
+            "updated_at": user["updated_at"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get user error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @router.post("/forgot-password")
-async def forgot_password(email: str, db = Depends(get_db)):
+async def forgot_password(
+    email: str,
+    controller: AuthController = Depends(get_auth_controller)
+):
     """Request password reset."""
-    controller = AuthController(db)
-    return await controller.forgot_password(email)
+    try:
+        return await controller.forgot_password(email)
+    except Exception as e:
+        logger.error(f"Forgot password error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.post("/reset-password")
-async def reset_password(token: str, new_password: str, db = Depends(get_db)):
-    """Reset password."""
-    controller = AuthController(db)
-    return await controller.reset_password(token, new_password)
 
-@router.put("/profile")
-async def update_profile(data: dict, current_user = Depends(get_current_user), db = Depends(get_db)):
+@router.post("/profile")
+async def update_profile(
+    data: UpdateProfileSchema,
+    request: Request,
+    controller: AuthController = Depends(get_auth_controller)
+):
     """Update user profile."""
-    controller = AuthController(db)
-    return await controller.update_profile(str(current_user["_id"]), data)
+    try:
+        user_id = request.state.user_id
+        return await controller.update_profile(user_id, data.dict(exclude_unset=True))
+    except AppException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except Exception as e:
+        logger.error(f"Update profile error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

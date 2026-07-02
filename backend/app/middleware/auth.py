@@ -1,46 +1,38 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
-from app.utils.security import verify_token
-from app.database.mongo import get_db
-from bson import ObjectId
+"""Authentication middleware."""
 
-security = HTTPBearer()
+from fastapi import Request, HTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
+from app.utils.security import decode_token
+from app.utils.logger import logger
 
-async def get_current_user(credentials: HTTPAuthCredentials = Depends(security), db = Depends(get_db)):
-    """Get current authenticated user."""
-    token = credentials.credentials
-    payload = verify_token(token)
-    
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    user = await db.users.find_one({"_id": ObjectId(user_id)})
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    return user
 
-async def get_admin_user(current_user = Depends(get_current_user)):
-    """Get current admin user."""
-    if current_user.get("role") != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required",
-        )
-    return current_user
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Middleware for JWT authentication."""
+    
+    async def dispatch(self, request: Request, call_next):
+        """Process request and validate JWT token."""
+        # Skip auth for public endpoints
+        public_paths = ["/", "/health", "/docs", "/redoc", "/openapi.json"]
+        if any(request.url.path.startswith(p) for p in public_paths):
+            return await call_next(request)
+        
+        # Skip auth for auth endpoints
+        if request.url.path.startswith("/api/auth/"):
+            if request.method == "POST" and request.url.path in ["/api/auth/signup", "/api/auth/login"]:
+                return await call_next(request)
+        
+        # Get token from header
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing authentication token")
+        
+        token = auth_header.split(" ")[1]
+        
+        try:
+            payload = decode_token(token)
+            request.state.user_id = payload.get("sub")
+        except Exception as e:
+            logger.error(f"Token validation error: {e}")
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        return await call_next(request)
