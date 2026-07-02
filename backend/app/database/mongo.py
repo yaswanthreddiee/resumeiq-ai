@@ -1,60 +1,62 @@
+"""MongoDB connection and management."""
+
+import logging
 from motor.motor_asyncio import AsyncClient, AsyncDatabase
-from typing import Optional
 from app.config import settings
 
-class Database:
-    client: Optional[AsyncClient] = None
-    db: Optional[AsyncDatabase] = None
+logger = logging.getLogger(__name__)
 
-db = Database()
+client: AsyncClient = None
+db: AsyncDatabase = None
+
 
 async def connect_db():
-    """Create database connection."""
-    db.client = AsyncClient(settings.DATABASE_URL)
-    db.db = db.client[settings.DATABASE_NAME]
-    
-    # Create indexes
-    await create_indexes()
-    print("✓ Database connected")
+    """Connect to MongoDB."""
+    global client, db
+    try:
+        client = AsyncClient(settings.DATABASE_URL)
+        db = client[settings.DATABASE_NAME]
+        
+        # Test connection
+        await db.command("ping")
+        logger.info(f"Connected to MongoDB: {settings.DATABASE_NAME}")
+        
+        # Create collections if they don't exist
+        collections = await db.list_collection_names()
+        
+        if "users" not in collections:
+            await db.create_collection("users")
+            await db.users.create_index("email", unique=True)
+            logger.info("Created 'users' collection with unique email index")
+        
+        if "resumes" not in collections:
+            await db.create_collection("resumes")
+            await db.resumes.create_index([("user_id", 1), ("created_at", -1)])
+            logger.info("Created 'resumes' collection")
+        
+        if "analyses" not in collections:
+            await db.create_collection("analyses")
+            await db.analyses.create_index([("resume_id", 1), ("created_at", -1)])
+            logger.info("Created 'analyses' collection")
+        
+        if "job_matches" not in collections:
+            await db.create_collection("job_matches")
+            await db.job_matches.create_index([("resume_id", 1), ("created_at", -1)])
+            logger.info("Created 'job_matches' collection")
+        
+    except Exception as e:
+        logger.error(f"Failed to connect to MongoDB: {e}")
+        raise
+
 
 async def close_db():
-    """Close database connection."""
-    if db.client:
-        db.client.close()
-        print("✓ Database disconnected")
+    """Close MongoDB connection."""
+    global client
+    if client:
+        client.close()
+        logger.info("MongoDB connection closed")
 
-async def create_indexes():
-    """Create database indexes for better performance."""
-    if not db.db:
-        return
-    
-    # Users indexes
-    await db.db.users.create_index("email", unique=True)
-    await db.db.users.create_index("created_at")
-    
-    # Resumes indexes
-    await db.db.resumes.create_index("user_id")
-    await db.db.resumes.create_index("created_at")
-    await db.db.resumes.create_index([("user_id", 1), ("created_at", -1)])
-    
-    # Analyses indexes
-    await db.db.analyses.create_index("resume_id")
-    await db.db.analyses.create_index("user_id")
-    await db.db.analyses.create_index("created_at")
-    
-    # Job matches indexes
-    await db.db.job_matches.create_index("resume_id")
-    await db.db.job_matches.create_index("user_id")
-    await db.db.job_matches.create_index("created_at")
-    
-    # Activity logs indexes
-    await db.db.activity_logs.create_index("user_id")
-    await db.db.activity_logs.create_index("timestamp")
-    
-    # Refresh tokens indexes
-    await db.db.refresh_tokens.create_index("user_id")
-    await db.db.refresh_tokens.create_index("expires_at", expireAfterSeconds=0)
 
-def get_db():
+def get_db() -> AsyncDatabase:
     """Get database instance."""
-    return db.db
+    return db

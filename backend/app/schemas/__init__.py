@@ -1,3 +1,1 @@
-"""
-Schemas initialization.
-"""
+"""Schemas module."""

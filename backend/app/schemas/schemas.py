@@ -1,74 +1,106 @@
+"""Pydantic models for request/response validation."""
+
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
 
-# Auth Schemas
+
 class UserSignupSchema(BaseModel):
+    """User signup request."""
     email: EmailStr
-    password: str = Field(min_length=8)
-    name: str = Field(min_length=1, max_length=100)
+    name: str = Field(..., min_length=1, max_length=100)
+    password: str = Field(..., min_length=8, max_length=100)
+
 
 class UserLoginSchema(BaseModel):
+    """User login request."""
     email: EmailStr
     password: str
 
-class UserSchema(BaseModel):
-    id: Optional[str] = Field(None, alias="_id")
+
+class UserResponseSchema(BaseModel):
+    """User response."""
+    _id: str
     email: str
     name: str
-    role: str = "user"
+    role: str
     created_at: datetime
     updated_at: datetime
 
-class TokenSchema(BaseModel):
+
+class TokenResponseSchema(BaseModel):
+    """Token response."""
     access_token: str
     token_type: str
-    user: UserSchema
+    user: UserResponseSchema
 
-# Resume Schemas
-class ResumeParsedContentSchema(BaseModel):
-    summary: Optional[str] = None
-    skills: List[str] = []
-    experience: List[dict] = []
-    education: List[dict] = []
-    projects: List[dict] = []
-    certifications: List[dict] = []
 
-class ResumeSchema(BaseModel):
-    id: Optional[str] = Field(None, alias="_id")
+class UpdateProfileSchema(BaseModel):
+    """Update profile request."""
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+
+class ResumeUploadSchema(BaseModel):
+    """Resume upload response."""
+    _id: str
     user_id: str
     file_name: str
     file_url: str
     uploaded_at: datetime
-    parsed_content: Optional[ResumeParsedContentSchema] = None
-    ats_score: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
 
-# ATS Score Schema
-class ATSScoreSchema(BaseModel):
-    id: Optional[str] = Field(None, alias="_id")
+
+class ResumeParsedContent(BaseModel):
+    """Parsed resume content."""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    summary: Optional[str] = None
+    experience: Optional[List[dict]] = []
+    education: Optional[List[dict]] = []
+    skills: Optional[List[str]] = []
+    certifications: Optional[List[str]] = []
+    projects: Optional[List[dict]] = []
+
+
+class ATSAnalysisSchema(BaseModel):
+    """ATS analysis response."""
+    _id: str
     resume_id: str
     overall_score: float
     keyword_match: float
     grammar_score: float
     formatting_score: float
     action_verb_score: float
-    missing_skills: List[str] = []
-    suggestions: List[str] = []
-    section_analysis: List[dict] = []
+    missing_skills: List[str]
+    suggestions: List[str]
+    section_analysis: Optional[List[dict]] = []
     created_at: datetime
 
-# Job Matching Schema
+
 class JobMatchingSchema(BaseModel):
-    id: Optional[str] = Field(None, alias="_id")
+    """Job matching response."""
+    _id: str
     resume_id: str
     job_description: str
     match_percentage: float
-    matched_keywords: List[str] = []
-    missing_keywords: List[str] = []
-    suggestions: List[str] = []
+    matched_keywords: List[str]
+    missing_keywords: List[str]
+    suggestions: List[str]
     created_at: datetime
 
-class JobDescriptionSchema(BaseModel):
-    job_description: str = Field(min_length=10)
+
+class JobDescriptionMatchRequestSchema(BaseModel):
+    """Job description matching request."""
+    job_description: str = Field(..., min_length=10)
+
+
+class AnalyticsResponseSchema(BaseModel):
+    """Analytics response."""
+    total_resumes: int
+    average_ats_score: float
+    resumes_analyzed: int
+    job_matches_performed: int
+    most_common_missing_skills: List[str]

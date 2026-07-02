@@ -1,35 +1,62 @@
-from datetime import datetime, timedelta
-from typing import Optional
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from app.config import settings
+"""Security utilities for password hashing and JWT token generation."""
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from datetime import datetime, timedelta
+from typing import Dict, Any
+import bcrypt
+from jose import JWTError, jwt
+from app.config import settings
+from app.utils.exceptions import UnauthorizedException
+
 
 def hash_password(password: str) -> str:
     """Hash password using bcrypt."""
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt(rounds=12)
+    return bcrypt.hashpw(password.encode(), salt).decode()
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
+    except Exception:
+        return False
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+
+def create_access_token(data: Dict[str, Any], expires_delta: timedelta = None) -> str:
     """Create JWT access token."""
     to_encode = data.copy()
+    
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(hours=settings.JWT_EXPIRATION_HOURS)
     
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM
+    )
     return encoded_jwt
 
-def verify_token(token: str) -> Optional[dict]:
-    """Verify JWT token."""
+
+def decode_token(token: str) -> Dict[str, Any]:
+    """Decode and verify JWT token."""
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM]
+        )
         return payload
     except JWTError:
-        return None
+        raise UnauthorizedException("Invalid token")
+
+
+def get_user_id_from_token(token: str) -> str:
+    """Extract user ID from token."""
+    payload = decode_token(token)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise UnauthorizedException("Invalid token")
+    return user_id

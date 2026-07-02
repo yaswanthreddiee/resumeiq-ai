@@ -1,25 +1,52 @@
-from fastapi import HTTPException, status
+"""Custom exceptions."""
 
-class APIException(HTTPException):
-    def __init__(self, status_code: int, detail: str):
-        super().__init__(status_code=status_code, detail=detail)
 
-class UnauthorizedException(APIException):
-    def __init__(self, detail: str = "Unauthorized"):
-        super().__init__(status.HTTP_401_UNAUTHORIZED, detail)
+class AppException(Exception):
+    """Base application exception."""
+    
+    def __init__(self, message: str, status_code: int = 500):
+        self.message = message
+        self.status_code = status_code
+        super().__init__(self.message)
 
-class ForbiddenException(APIException):
-    def __init__(self, detail: str = "Forbidden"):
-        super().__init__(status.HTTP_403_FORBIDDEN, detail)
 
-class NotFoundException(APIException):
-    def __init__(self, detail: str = "Not found"):
-        super().__init__(status.HTTP_404_NOT_FOUND, detail)
+class NotFoundException(AppException):
+    """Resource not found."""
+    
+    def __init__(self, message: str = "Resource not found"):
+        super().__init__(message, 404)
 
-class BadRequestException(APIException):
-    def __init__(self, detail: str = "Bad request"):
-        super().__init__(status.HTTP_400_BAD_REQUEST, detail)
 
-class ConflictException(APIException):
-    def __init__(self, detail: str = "Conflict"):
-        super().__init__(status.HTTP_409_CONFLICT, detail)
+class BadRequestException(AppException):
+    """Invalid request."""
+    
+    def __init__(self, message: str = "Bad request"):
+        super().__init__(message, 400)
+
+
+class ConflictException(AppException):
+    """Resource conflict."""
+    
+    def __init__(self, message: str = "Conflict"):
+        super().__init__(message, 409)
+
+
+class UnauthorizedException(AppException):
+    """Unauthorized access."""
+    
+    def __init__(self, message: str = "Unauthorized"):
+        super().__init__(message, 401)
+
+
+class ForbiddenException(AppException):
+    """Forbidden access."""
+    
+    def __init__(self, message: str = "Forbidden"):
+        super().__init__(message, 403)
+
+
+class InternalServerException(AppException):
+    """Internal server error."""
+    
+    def __init__(self, message: str = "Internal server error"):
+        super().__init__(message, 500)
