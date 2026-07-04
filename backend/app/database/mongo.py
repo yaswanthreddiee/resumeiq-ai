@@ -1,20 +1,20 @@
 """MongoDB connection and management."""
 
 import logging
-from motor.motor_asyncio import AsyncClient, AsyncDatabase
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-client: AsyncClient = None
-db: AsyncDatabase = None
+client: AsyncIOMotorClient | None = None
+db: AsyncIOMotorDatabase | None = None
 
 
 async def connect_db():
     """Connect to MongoDB."""
     global client, db
     try:
-        client = AsyncClient(settings.DATABASE_URL)
+        client = AsyncIOMotorClient(settings.DATABASE_URL)
         db = client[settings.DATABASE_NAME]
         
         # Test connection
@@ -52,11 +52,14 @@ async def connect_db():
 async def close_db():
     """Close MongoDB connection."""
     global client
+
     if client:
         client.close()
         logger.info("MongoDB connection closed")
 
 
-def get_db() -> AsyncDatabase:
-    """Get database instance."""
+def get_db() -> AsyncIOMotorDatabase:
+    """Return the MongoDB database instance."""
+    if db is None:
+        raise RuntimeError("Database connection has not been initialized.")
     return db

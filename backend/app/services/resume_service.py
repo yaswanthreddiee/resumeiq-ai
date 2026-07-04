@@ -1,112 +1,219 @@
-"""Resume parsing and analysis service."""
+from fastapi import UploadFile
 
-import PyPDF2
-from docx import Document
-from typing import Dict, Any
-import re
+from app.ai.resume_parser import ResumeParser
+from app.repositories.resume_repository import ResumeRepository
+from app.services.ai_service import AIService
+from app.services.file_service import FileService
+from app.services.parser_service import ParserService
+from app.utils.exceptions import NotFoundException
 from app.utils.logger import logger
 
 
 class ResumeService:
-    """Service for parsing resume files."""
-    
+    """
+    Business logic for resume operations.
+    """
+
     def __init__(self, db):
-        self.db = db
-    
-    async def parse_resume(self, file_path: str, file_ext: str) -> Dict[str, Any]:
-        """Parse resume file and extract content."""
+
+        self.file_service = FileService()
+        self.parser_service = ParserService()
+        self.resume_parser = ResumeParser()
+        self.ai_service = AIService()
+        self.repository = ResumeRepository(db)
+
+    # --------------------------------------------------
+    # Upload Resume
+    # --------------------------------------------------
+
+    async def upload_resume(
+        self,
+        user_id: str,
+        file: UploadFile,
+    ):
+
         try:
-            if file_ext == "pdf":
-                return await self._parse_pdf(file_path)
-            elif file_ext == "docx":
-                return await self._parse_docx(file_path)
-            else:
-                raise ValueError(f"Unsupported file type: {file_ext}")
+
+            saved_file = await self.file_service.save_file(file)
+
+            raw_text = await self.parser_service.extract_text(
+                saved_file["path"],
+                saved_file["extension"],
+            )
+
+            parsed_resume = await self.resume_parser.parse(
+                raw_text
+            )
+
+            resume = await self.repository.create_resume(
+                user_id=user_id,
+                filename=saved_file["filename"],
+                stored_path=saved_file["path"],
+                parsed_content=parsed_resume,
+            )
+
+            return {
+                "_id": str(resume["_id"]),
+                "user_id": user_id,
+                "file_name": resume["file_name"],
+                "file_url": resume["file_url"],
+                "parsed_content": resume["parsed_content"],
+                "uploaded_at": resume["uploaded_at"],
+            }
+
         except Exception as e:
-            logger.error(f"Error parsing resume: {e}")
+            logger.error(f"Upload Resume Error: {e}")
             raise
-    
-    async def _parse_pdf(self, file_path: str) -> Dict[str, Any]:
-        """Extract text from PDF resume."""
-        text = ""
-        try:
-            with open(file_path, "rb") as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                for page in pdf_reader.pages:
-                    text += page.extract_text()
-        except Exception as e:
-            logger.error(f"Error reading PDF: {e}")
-            raise
-        
-        return self._extract_resume_fields(text)
-    
-    async def _parse_docx(self, file_path: str) -> Dict[str, Any]:
-        """Extract text from DOCX resume."""
-        text = ""
-        try:
-            doc = Document(file_path)
-            for paragraph in doc.paragraphs:
-                text += paragraph.text + "\n"
-        except Exception as e:
-            logger.error(f"Error reading DOCX: {e}")
-            raise
-        
-        return self._extract_resume_fields(text)
-    
-    def _extract_resume_fields(self, text: str) -> Dict[str, Any]:
-        """Extract structured fields from resume text."""
+
+    # --------------------------------------------------
+    # Resume CRUD
+    # --------------------------------------------------
+
+    async def get_resume(
+        self,
+        resume_id: str,
+        user_id: str,
+    ):
+
+        resume = await self.repository.get_resume(
+            resume_id,
+            user_id,
+        )
+
+        if resume is None:
+            raise NotFoundException("Resume not found")
+
+        return resume
+
+    async def get_resumes(
+        self,
+        user_id: str,
+    ):
+
+        return await self.repository.list_resumes(
+            user_id,
+        )
+
+    async def delete_resume(
+        self,
+        resume_id: str,
+        user_id: str,
+    ):
+
+        resume = await self.repository.delete_resume(
+            resume_id,
+            user_id,
+        )
+
+        if resume is None:
+            raise NotFoundException("Resume not found")
+
+        self.file_service.delete_file(
+            resume["file_url"],
+        )
+
+        await self.repository.delete_resume_related_data(
+            resume_id,
+        )
+
         return {
-            "raw_text": text,
-            "email": self._extract_email(text),
-            "phone": self._extract_phone(text),
-            "skills": self._extract_skills(text),
-            "experience": self._extract_experience_years(text),
-            "education": self._extract_education(text),
+            "message": "Resume deleted successfully"
         }
-    
-    def _extract_email(self, text: str) -> str:
-        """Extract email from text."""
-        pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-        match = re.search(pattern, text)
-        return match.group(0) if match else ""
-    
-    def _extract_phone(self, text: str) -> str:
-        """Extract phone number from text."""
-        pattern = r"\+?1?\d{9,15}"
-        match = re.search(pattern, text)
-        return match.group(0) if match else ""
-    
-    def _extract_skills(self, text: str) -> list:
-        """Extract common skills from resume."""
-        common_skills = [
-            "Python", "JavaScript", "TypeScript", "Java", "C++", "C#",
-            "React", "Vue", "Angular", "Node.js", "FastAPI", "Django",
-            "MongoDB", "PostgreSQL", "MySQL", "AWS", "Azure", "Docker",
-            "Kubernetes", "Git", "REST API", "GraphQL", "SQL",
-            "HTML", "CSS", "Tailwind", "Bootstrap", "Jest", "Pytest",
-            "Linux", "Windows", "Mac", "CI/CD", "DevOps"
-        ]
-        found_skills = []
-        text_lower = text.lower()
-        for skill in common_skills:
-            if skill.lower() in text_lower:
-                found_skills.append(skill)
-        return found_skills
-    
-    def _extract_experience_years(self, text: str) -> int:
-        """Estimate years of experience."""
-        pattern = r"(\d+)\s*(?:years?|yrs?)"
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        if matches:
-            return max([int(m) for m in matches])
-        return 0
-    
-    def _extract_education(self, text: str) -> list:
-        """Extract education information."""
-        degrees = ["Bachelor", "Master", "PhD", "Associate", "Diploma"]
-        education = []
-        text_lower = text.lower()
-        for degree in degrees:
-            if degree.lower() in text_lower:
-                education.append(degree)
-        return education
+
+    # --------------------------------------------------
+    # ATS Analysis
+    # --------------------------------------------------
+
+    async def analyze_ats(
+        self,
+        resume_id: str,
+        user_id: str,
+    ):
+
+        resume = await self.get_resume(
+            resume_id,
+            user_id,
+        )
+
+        analysis = await self.ai_service.analyze_ats(
+            resume["parsed_content"]
+        )
+
+        await self.repository.update_ats_score(
+            resume_id,
+            analysis,
+        )
+
+        await self.repository.save_ats_analysis(
+            resume_id,
+            user_id,
+            analysis,
+        )
+
+        return analysis
+
+    async def get_ats_score(
+        self,
+        resume_id: str,
+        user_id: str,
+    ):
+
+        analysis = await self.repository.get_ats_analysis(
+            resume_id,
+            user_id,
+        )
+
+        if analysis is None:
+            raise NotFoundException(
+                "ATS analysis not found"
+            )
+
+        return analysis
+
+    # --------------------------------------------------
+    # Job Matching
+    # --------------------------------------------------
+
+    async def match_job_description(
+        self,
+        resume_id: str,
+        user_id: str,
+        job_description: str,
+    ):
+
+        resume = await self.get_resume(
+            resume_id,
+            user_id,
+        )
+
+        result = await self.ai_service.match_job_description(
+            resume["parsed_content"],
+            job_description,
+        )
+
+        await self.repository.save_job_match(
+            resume_id,
+            user_id,
+            job_description,
+            result,
+        )
+
+        return result
+
+    async def get_job_matching(
+        self,
+        resume_id: str,
+        user_id: str,
+    ):
+
+        result = await self.repository.get_job_match(
+            resume_id,
+            user_id,
+        )
+
+        if result is None:
+            raise NotFoundException(
+                "Job matching not found"
+            )
+
+        return result

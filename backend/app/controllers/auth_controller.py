@@ -112,3 +112,5 @@ class AuthController:
             "created_at": result["created_at"],
             "updated_at": result["updated_at"],
         }
+
+
